@@ -8,6 +8,7 @@ class Engine:
         # Use the caller's connection if given, otherwise a fresh in-memory DB.
         self.con = con if con is not None else duckdb.connect()
 
+        
     def query(self, sql: str) -> pd.DataFrame:
         # sqlglot.parse returns a list, one entry per ;-separated statement.
         statements = [s for s in sqlglot.parse(sql, read="duckdb") if s is not None]
