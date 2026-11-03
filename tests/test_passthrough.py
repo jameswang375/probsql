@@ -76,7 +76,7 @@ def test_non_read_statements_rejected(engine, sql):
     with pytest.raises(ValueError):
         engine.query(sql)
 
-def test_multiple_statementes_rejected(engine):
+def test_multiple_statements_rejected(engine):
     with pytest.raises(ValueError):
         engine.query("SELECT 1; SELECT 2")
 
