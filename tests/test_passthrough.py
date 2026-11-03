@@ -4,6 +4,18 @@ from pandas.testing import assert_frame_equal
 from sqlglot.errors import ParseError
 from probsql.engine import Engine
 
+"""Passthrough tests for Engine.
+
+Checks that ordinary SQL (no PSQL_* constructs) gives the same result through
+Engine.query as it does when run directly on DuckDB. Engine parses each query
+with sqlglot and regenerates the SQL before running it, so these tests prove
+that step doesn't change what a query means.
+
+Also checks Engine's guard behavior: it is read-only, accepts exactly one
+statement, lets sqlglot's ParseError propagate on malformed SQL, and lets
+DuckDB's own errors through for unknown functions.
+"""
+
 @pytest.fixture
 def con():
     con = duckdb.connect()

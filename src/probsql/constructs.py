@@ -1,4 +1,5 @@
 import numpy as np
+from dataclasses import dataclass
 
 # Levels closer than this are treated as equal. It absorbs float noise like
 # (1 - 0.9) / 2 == 0.04999999999999999.
@@ -90,3 +91,17 @@ def prob_exceeds(grid, levels, threshold):
     cdf[mid] = y0 * (1 - weight) + y1 * weight
 
     return 1.0 - cdf
+
+@dataclass(frozen=True)
+class Construct:
+    name: str  # SQL name, uppercase
+    n_args: int # number of arguments in the SQL call
+
+
+
+REGISTRY = {
+    "PSQL_PREDICT": Construct("PSQL_PREDICT", 1),   # PSQL_PREDICT(col)
+    "PSQL_LOW": Construct("PSQL_LOW", 2),           # PSQL_LOW(col, level)
+    "PSQL_HIGH": Construct("PSQL_HIGH", 2),         # PSQL_HIGH(col, level)
+}
+
