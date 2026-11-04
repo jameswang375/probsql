@@ -3,6 +3,7 @@ import pytest
 from pandas.testing import assert_frame_equal
 from sqlglot.errors import ParseError
 from probsql.engine import Engine
+from probsql.models.stub import StubModel
 
 """Passthrough tests for Engine.
 
@@ -48,7 +49,7 @@ def con():
 
 @pytest.fixture
 def engine(con):
-    return Engine(con=con)
+    return Engine(con=con, model_factory=StubModel)
 
 def normalize(df):
     # SQL doesn't guarantee row order without ORDER BY, so sort before comparing.
