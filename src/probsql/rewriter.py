@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sqlglot import exp
 
 from probsql import constructs
@@ -57,8 +58,11 @@ def _check_node(node, ast):
     top = node
     while top.parent is not ast:
         top = top.parent
-    if not any(top is e for e in ast.expressions):
-        _unsupported("PSQL_* outside the SELECT list")
+        clauses = [ast.args.get(k) for k in ("where", "group", "having", "order")]
+        in_select = any(top is e for e in ast.expressions)
+        in_clause = any(top is c for c in clauses if c is not None)
+        if not (in_select or in_clause):
+            _unsupported("PSQL_* outside SELECT, WHERE, GROUP BY, HAVING or ORDER BY")
     if not isinstance(node.expressions[0], exp.Column):
         _unsupported(f"{name} on anything other than a plain column")
     if name in ("PSQL_LOW", "PSQL_HIGH"):
@@ -80,11 +84,24 @@ def _grid(con, table_name, column_name, model_factory):
     if not features:
         raise ValueError("the table has no other columns to predict from")
 
-    known = df[target].notna()
-    model = model_factory().fit(df.loc[known, features], df.loc[known, target])
-    grid = model.predict_quantiles(df[features])
-    return df[_RID].to_numpy(), grid, model.levels
+    X, y = df[features], df[target]
+    known = np.flatnonzero(y.notna().to_numpy())
+    missing = np.flatnonzero(y.isna().to_numpy())
+    if len(known) < 2:
+        raise ValueError("leave-one-out needs at least two rows with a known value")
 
+    rows = {}
+    for i in known:
+        rest = known[known != i]
+        model = model_factory().fit(X.iloc[rest], y.iloc[rest])
+        rows[i] = model.predict_quantiles(X.iloc[[i]])[0]
+    if len(missing):
+        model = model_factory().fit(X.iloc[known], y.iloc[known])
+        for i, r in zip(missing, model.predict_quantiles(X.iloc[missing])):
+            rows[i] = r
+
+    grid = np.vstack([rows[i] for i in range(len(df))])
+    return df[_RID].to_numpy(), grid, model.levels
 
 def _reduce(node, grid, levels):
     args = [float(a.name) for a in node.expressions[1:]]
@@ -117,12 +134,17 @@ def rewrite(ast, con, model_factory):
         rids, grid, levels = _grid(con, table.name, column, model_factory)
 
         data = {"rid": rids}
-        for j, node in enumerate(group):
-            data[f"v{j}"] = _reduce(node, grid, levels)
-        con.register(name, pd.DataFrame(data))
+        keys = [n.sql().upper() for n in group]
+        slots = {}  # identical calls share one column
+        for key, node in zip(keys, group):
+            if key not in slots:
+                slots[key] = f"v{len(slots)}"
+                data[slots[key]] = _reduce(node, grid, levels)
 
+        con.register(name, pd.DataFrame(data))
         join_condition = exp.column("rowid", table=alias).eq(exp.column("rid", table=name))
         ast.join(exp.to_table(name), on=join_condition, join_type="left", copy=False)
-        for j, node in enumerate(group):
-            node.replace(exp.column(f"v{j}", table=name))
+        for key, node in zip(keys, group):
+            node.replace(exp.column(slots[key], table=name))
+
     return ast

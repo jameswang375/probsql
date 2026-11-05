@@ -35,7 +35,7 @@ def test_predicted_column_works_with_order_by(engine):
 
 def test_unsupported_query_raises_through_engine(engine):
     with pytest.raises(ValueError, match="not supported yet"):
-        engine.query("SELECT id FROM listings WHERE PSQL_PREDICT(price) > 300000")
+        engine.query("SELECT PSQL_PREDICT(price) AS est FROM (SELECT * FROM listings)")
 
 
 def test_engine_uses_the_given_model_factory(engine):
@@ -47,4 +47,4 @@ def test_engine_uses_the_given_model_factory(engine):
 
     engine.model_factory = factory
     engine.query("SELECT PSQL_PREDICT(price) AS est FROM listings")
-    assert len(calls) == 1
+    assert len(calls) == 6

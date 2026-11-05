@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 import sqlglot
+import numpy as np
 
 from probsql import constructs
 from probsql.models.stub import StubModel
@@ -39,9 +40,19 @@ def run(con, sql):
 def expected_grid(con):
     df = con.sql("SELECT * FROM listings").df()
     feats = ["id", "area", "label"]
-    known = df["price"].notna()
-    model = StubModel().fit(df.loc[known, feats], df.loc[known, "price"])
-    return df["id"], model.predict_quantiles(df[feats]), model.levels
+    y = df["price"]
+    known = np.flatnonzero(y.notna().to_numpy())
+    missing = np.flatnonzero(y.isna().to_numpy())
+    rows = {}
+    for i in known:
+        rest = known[known != i]
+        m = StubModel().fit(df[feats].iloc[rest], y.iloc[rest])
+        rows[i] = m.predict_quantiles(df[feats].iloc[[i]])[0]
+    m = StubModel().fit(df[feats].iloc[known], y.iloc[known])
+    for i, r in zip(missing, m.predict_quantiles(df[feats].iloc[missing])):
+        rows[i] = r
+    grid = np.vstack([rows[i] for i in range(len(df))])
+    return df["id"], grid, m.levels
 
 
 def expected_by_id(con):
@@ -90,7 +101,6 @@ def test_case_insensitive_name(con):
 @pytest.mark.parametrize(
     "sql",
     [
-        "SELECT id FROM listings WHERE PSQL_PREDICT(price) > 300000",
         "SELECT PSQL_PREDICT(price + 1) AS est FROM listings",
         "SELECT *, PSQL_PREDICT(price) AS est FROM listings",
         "SELECT PSQL_PREDICT(price) AS est FROM listings a JOIN listings b ON a.id = b.id",
@@ -138,7 +148,7 @@ def test_low_is_below_predict_is_below_high(con):
     assert (out["mid"] < out["hi"]).all()
 
 
-def test_model_runs_once_per_column(con):
+def test_model_fits_are_shared_across_calls_on_a_column(con):
     calls = []
 
     def factory():
@@ -150,7 +160,7 @@ def test_model_runs_once_per_column(con):
         "PSQL_HIGH(price, 0.8) AS c FROM listings"
     )
     rewrite(parse(sql), con, factory)
-    assert len(calls) == 1
+    assert len(calls) == 6
 
 
 def test_model_runs_once_for_each_different_column(con):
@@ -162,7 +172,7 @@ def test_model_runs_once_for_each_different_column(con):
 
     sql = "SELECT PSQL_PREDICT(price) AS a, PSQL_PREDICT(area) AS b FROM listings"
     rewrite(parse(sql), con, factory)
-    assert len(calls) == 2
+    assert len(calls) == 12
 
 
 @pytest.mark.parametrize(
@@ -181,3 +191,11 @@ def test_level_must_be_a_plain_number(con, sql):
 def test_level_beyond_the_grid_raises(con):
     with pytest.raises(ValueError, match="outside"):
         rewrite(parse("SELECT PSQL_LOW(price, 0.99) AS lo FROM listings"), con, StubModel)
+
+def test_a_rows_own_price_does_not_affect_its_prediction(con):
+    sql = "SELECT id, PSQL_PREDICT(price) AS est FROM listings"
+    before = run(con, sql).set_index("id")["est"]
+    con.execute("UPDATE listings SET price = 999999 WHERE id = 1")
+    after = run(con, sql).set_index("id")["est"]
+    assert after[1] == pytest.approx(before[1])
+    assert after[2] != pytest.approx(before[2])  # other rows do see it
