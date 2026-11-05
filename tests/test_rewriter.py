@@ -36,14 +36,17 @@ def run(con, sql):
     return con.sql(ast.sql(dialect="duckdb")).df()
 
 
-def expected_by_id(con):
-    """What the stub should predict for each id, computed directly."""
+def expected_grid(con):
     df = con.sql("SELECT * FROM listings").df()
     feats = ["id", "area", "label"]
     known = df["price"].notna()
     model = StubModel().fit(df.loc[known, feats], df.loc[known, "price"])
-    medians = constructs.predict(model.predict_quantiles(df[feats]), model.levels)
-    return dict(zip(df["id"], medians))
+    return df["id"], model.predict_quantiles(df[feats]), model.levels
+
+
+def expected_by_id(con):
+    ids, grid, levels = expected_grid(con)
+    return dict(zip(ids, constructs.predict(grid, levels)))
 
 
 def test_query_without_constructs_is_unchanged(con):
@@ -88,7 +91,6 @@ def test_case_insensitive_name(con):
     "sql",
     [
         "SELECT id FROM listings WHERE PSQL_PREDICT(price) > 300000",
-        "SELECT PSQL_LOW(price, 0.9) AS lo FROM listings",
         "SELECT PSQL_PREDICT(price + 1) AS est FROM listings",
         "SELECT *, PSQL_PREDICT(price) AS est FROM listings",
         "SELECT PSQL_PREDICT(price) AS est FROM listings a JOIN listings b ON a.id = b.id",
@@ -112,3 +114,70 @@ def test_unknown_column_raises(con):
 def test_non_numeric_target_raises(con):
     with pytest.raises(ValueError, match="numeric"):
         rewrite(parse("SELECT PSQL_PREDICT(label) AS est FROM listings"), con, StubModel)
+
+def test_low_and_high_match_model_output(con):
+    out = run(
+        con,
+        "SELECT id, PSQL_LOW(price, 0.9) AS lo, PSQL_HIGH(price, 0.9) AS hi FROM listings",
+    )
+    ids, grid, levels = expected_grid(con)
+    lo = dict(zip(ids, constructs.low(grid, levels, 0.9)))
+    hi = dict(zip(ids, constructs.high(grid, levels, 0.9)))
+    for id_, a, b in zip(out["id"], out["lo"], out["hi"]):
+        assert a == pytest.approx(lo[id_])
+        assert b == pytest.approx(hi[id_])
+
+
+def test_low_is_below_predict_is_below_high(con):
+    out = run(
+        con,
+        "SELECT PSQL_LOW(price, 0.9) AS lo, PSQL_PREDICT(price) AS mid, "
+        "PSQL_HIGH(price, 0.9) AS hi FROM listings",
+    )
+    assert (out["lo"] < out["mid"]).all()
+    assert (out["mid"] < out["hi"]).all()
+
+
+def test_model_runs_once_per_column(con):
+    calls = []
+
+    def factory():
+        calls.append(1)
+        return StubModel()
+
+    sql = (
+        "SELECT PSQL_PREDICT(price) AS a, PSQL_LOW(PRICE, 0.9) AS b, "
+        "PSQL_HIGH(price, 0.8) AS c FROM listings"
+    )
+    rewrite(parse(sql), con, factory)
+    assert len(calls) == 1
+
+
+def test_model_runs_once_for_each_different_column(con):
+    calls = []
+
+    def factory():
+        calls.append(1)
+        return StubModel()
+
+    sql = "SELECT PSQL_PREDICT(price) AS a, PSQL_PREDICT(area) AS b FROM listings"
+    rewrite(parse(sql), con, factory)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT PSQL_LOW(price, '0.9') AS lo FROM listings",
+        "SELECT PSQL_LOW(price, area) AS lo FROM listings",
+        "SELECT PSQL_HIGH(price, -0.9) AS hi FROM listings",
+    ],
+)
+def test_level_must_be_a_plain_number(con, sql):
+    with pytest.raises(ValueError, match="not supported yet"):
+        rewrite(parse(sql), con, StubModel)
+
+
+def test_level_beyond_the_grid_raises(con):
+    with pytest.raises(ValueError, match="outside"):
+        rewrite(parse("SELECT PSQL_LOW(price, 0.99) AS lo FROM listings"), con, StubModel)

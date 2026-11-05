@@ -6,6 +6,12 @@ from probsql.parser import find_constructs
 
 _RID = "_psql_rid"
 
+_REDUCERS = {
+    "PSQL_PREDICT": lambda grid, levels, args: constructs.predict(grid, levels),
+    "PSQL_LOW": lambda grid, levels, args: constructs.low(grid, levels, args[0]),
+    "PSQL_HIGH": lambda grid, levels, args: constructs.high(grid, levels, args[0]),
+}
+
 
 def _unsupported(what):
     raise ValueError(f"{what} is not supported yet")
@@ -43,8 +49,9 @@ def _check_query(ast, con):
 
 
 def _check_node(node, ast):
-    if node.name.upper() != "PSQL_PREDICT":
-        _unsupported(node.name.upper())
+    name = node.name.upper()
+    if name not in _REDUCERS:
+        _unsupported(name)
     if node.find_ancestor(exp.Select) is not ast:
         _unsupported("PSQL_* inside a subquery")
     top = node
@@ -53,17 +60,21 @@ def _check_node(node, ast):
     if not any(top is e for e in ast.expressions):
         _unsupported("PSQL_* outside the SELECT list")
     if not isinstance(node.expressions[0], exp.Column):
-        _unsupported("PSQL_PREDICT on anything other than a plain column")
+        _unsupported(f"{name} on anything other than a plain column")
+    if name in ("PSQL_LOW", "PSQL_HIGH"):
+        level = node.expressions[1]
+        if not isinstance(level, exp.Literal) or level.is_string:
+            _unsupported(f"{name} with a level that is not a plain number")
 
 
-def _predictions(con, table_name, column_name, model_factory):
-    """Return a DataFrame of (rid, value): one median prediction per table row."""
+def _grid(con, table_name, column_name, model_factory):
+    """Run the model once. Returns (rowids, quantile grid, levels)."""
     df = con.sql(f"SELECT rowid AS {_RID}, * FROM {_quote(table_name)}").df()
     target = next((c for c in df.columns if c.lower() == column_name.lower()), None)
     if target is None or target == _RID:
         raise ValueError(f"column {column_name!r} not found in {table_name!r}")
     if not pd.api.types.is_numeric_dtype(df[target]):
-        raise ValueError(f"PSQL_PREDICT needs a numeric column, but {target!r} is not")
+        raise ValueError(f"PSQL_* needs a numeric column, but {target!r} is not")
 
     features = [c for c in df.columns if c not in (_RID, target)]
     if not features:
@@ -72,13 +83,18 @@ def _predictions(con, table_name, column_name, model_factory):
     known = df[target].notna()
     model = model_factory().fit(df.loc[known, features], df.loc[known, target])
     grid = model.predict_quantiles(df[features])
-    values = constructs.predict(grid, model.levels)
-    return pd.DataFrame({"rid": df[_RID], "value": values})
+    return df[_RID].to_numpy(), grid, model.levels
+
+
+def _reduce(node, grid, levels):
+    args = [float(a.name) for a in node.expressions[1:]]
+    return _REDUCERS[node.name.upper()](grid, levels, args)
 
 
 def rewrite(ast, con, model_factory):
-    """Return a copy of ast with each PSQL_PREDICT(col) replaced by a column
-    from a registered table of predictions, joined back on rowid."""
+    """Return a copy of ast with each PSQL_* call replaced by a column from a
+    registered table of results, joined back on rowid. The model runs once per
+    target column."""
     ast = ast.copy()
     nodes = find_constructs(ast)
     if not nodes:
@@ -88,13 +104,25 @@ def rewrite(ast, con, model_factory):
     for node in nodes:
         _check_node(node, ast)
 
+    
+    groups = {}
+    for node in nodes:
+        groups.setdefault(node.expressions[0].name.lower(), []).append(node)
+
     table = ast.args["from_"].this
     alias = table.alias_or_name
-    for i, node in enumerate(nodes):
+    for i, group in enumerate(groups.values()):
         name = f"_psql_pred_{i}"
-        frame = _predictions(con, table.name, node.expressions[0].name, model_factory)
-        con.register(name, frame)
+        column = group[0].expressions[0].name
+        rids, grid, levels = _grid(con, table.name, column, model_factory)
+
+        data = {"rid": rids}
+        for j, node in enumerate(group):
+            data[f"v{j}"] = _reduce(node, grid, levels)
+        con.register(name, pd.DataFrame(data))
+
         join_condition = exp.column("rowid", table=alias).eq(exp.column("rid", table=name))
         ast.join(exp.to_table(name), on=join_condition, join_type="left", copy=False)
-        node.replace(exp.column("value", table=name))
+        for j, node in enumerate(group):
+            node.replace(exp.column(f"v{j}", table=name))
     return ast
