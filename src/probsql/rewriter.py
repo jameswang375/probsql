@@ -7,10 +7,56 @@ from probsql.parser import find_constructs
 
 _RID = "_psql_rid"
 
+def _probability(grid, levels, threshold, asks_below):
+    """Prob here means probability above a certain quantity. 
+    So return prob as is if you want probability above a certain value, otherwise return the remaining probability (1 - prob), 
+    which would be the probability below a certain value."""
+
+    prob = constructs.prob_exceeds(grid, levels, threshold)
+    return 1.0 - prob if asks_below else prob
+
+def _number(node):
+    """Value of a constant like 500000, -5 or (100 + 5) * 2, or None if it's anything else."""
+    if isinstance(node, exp.Paren):
+        return _number(node.this)
+    if isinstance(node, exp.Neg):
+        inner_value = _number(node.this)
+        return None if inner_value is None else -inner_value
+    if isinstance(node, (exp.Add, exp.Sub, exp.Mul, exp.Div)):
+        left_value, right_value = _number(node.this), _number(node.expression)
+        if left_value is None or right_value is None:
+            return None
+        if isinstance(node, exp.Add):
+            return left_value + right_value
+        if isinstance(node, exp.Sub):
+            return left_value - right_value
+        if isinstance(node, exp.Mul):
+            return left_value * right_value
+        return None if right_value == 0 else left_value / right_value
+    if isinstance(node, exp.Literal) and not node.is_string:
+        return float(node.name)
+    return None
+
+
+def _split(comparison):
+    """For a comparison between a column and a constant, in either order, return
+    (column, number, asks_below), where asks_below is True if it asks for the chance the
+    column is under the number. Returns None for anything else."""
+    if not isinstance(comparison, (exp.GT, exp.GTE, exp.LT, exp.LTE)):
+        return None
+    asks_below = isinstance(comparison, (exp.LT, exp.LTE))
+    left, right = comparison.this, comparison.expression
+    if isinstance(left, exp.Column) and _number(right) is not None:
+        return left, _number(right), asks_below
+    if isinstance(right, exp.Column) and _number(left) is not None:
+        return right, _number(left), not asks_below
+    return None
+
 _REDUCERS = {
     "PSQL_PREDICT": lambda grid, levels, args: constructs.predict(grid, levels),
     "PSQL_LOW": lambda grid, levels, args: constructs.low(grid, levels, args[0]),
     "PSQL_HIGH": lambda grid, levels, args: constructs.high(grid, levels, args[0]),
+    "PSQL_PROBABILITY": lambda grid, levels, args: _probability(grid, levels, args[0], args[1]),
 }
 
 
@@ -29,6 +75,11 @@ def _is_base_table(con, name):
         [name],
     ).fetchall()
     return bool(rows)
+
+def _target(node):
+    if node.name.upper() == "PSQL_PROBABILITY":
+        return _split(node.expressions[0])[0]
+    return node.expressions[0]
 
 
 def _check_query(ast, con):
@@ -58,12 +109,15 @@ def _check_node(node, ast):
     top = node
     while top.parent is not ast:
         top = top.parent
-        clauses = [ast.args.get(k) for k in ("where", "group", "having", "order")]
-        in_select = any(top is e for e in ast.expressions)
-        in_clause = any(top is c for c in clauses if c is not None)
-        if not (in_select or in_clause):
-            _unsupported("PSQL_* outside SELECT, WHERE, GROUP BY, HAVING or ORDER BY")
-    if not isinstance(node.expressions[0], exp.Column):
+    clauses = [ast.args.get(k) for k in ("where", "group", "having", "order")]
+    in_select = any(top is e for e in ast.expressions)
+    in_clause = any(top is c for c in clauses if c is not None)
+    if not (in_select or in_clause):
+        _unsupported("PSQL_* outside SELECT, WHERE, GROUP BY, HAVING or ORDER BY")
+    if name == "PSQL_PROBABILITY":
+        if _split(node.expressions[0]) is None:
+            _unsupported("PSQL_PROBABILITY comparing anything other than a column to a constant number")
+    elif not isinstance(node.expressions[0], exp.Column):
         _unsupported(f"{name} on anything other than a plain column")
     if name in ("PSQL_LOW", "PSQL_HIGH"):
         level = node.expressions[1]
@@ -104,8 +158,13 @@ def _grid(con, table_name, column_name, model_factory):
     return df[_RID].to_numpy(), grid, model.levels
 
 def _reduce(node, grid, levels):
-    args = [float(a.name) for a in node.expressions[1:]]
-    return _REDUCERS[node.name.upper()](grid, levels, args)
+    name = node.name.upper()
+    if name == "PSQL_PROBABILITY":
+        _, number, asks_below = _split(node.expressions[0])
+        args = [number, asks_below]
+    else:
+        args = [float(a.name) for a in node.expressions[1:]]
+    return _REDUCERS[name](grid, levels, args)
 
 
 def rewrite(ast, con, model_factory):
@@ -124,13 +183,13 @@ def rewrite(ast, con, model_factory):
     
     groups = {}
     for node in nodes:
-        groups.setdefault(node.expressions[0].name.lower(), []).append(node)
+        groups.setdefault(_target(node).name.lower(), []).append(node)
 
     table = ast.args["from_"].this
     alias = table.alias_or_name
     for i, group in enumerate(groups.values()):
         name = f"_psql_pred_{i}"
-        column = group[0].expressions[0].name
+        column = _target(group[0]).name
         rids, grid, levels = _grid(con, table.name, column, model_factory)
 
         data = {"rid": rids}

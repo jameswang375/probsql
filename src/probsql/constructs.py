@@ -103,5 +103,6 @@ REGISTRY = {
     "PSQL_PREDICT": Construct("PSQL_PREDICT", 1),   # PSQL_PREDICT(col)
     "PSQL_LOW": Construct("PSQL_LOW", 2),           # PSQL_LOW(col, level)
     "PSQL_HIGH": Construct("PSQL_HIGH", 2),         # PSQL_HIGH(col, level)
+    "PSQL_PROBABILITY": Construct("PSQL_PROBABILITY", 1),   # PSQL_PROBABILITY(col > number)
 }
 
