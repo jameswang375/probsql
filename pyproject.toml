@@ -13,6 +13,7 @@ dependencies = [
     "duckdb",
     "numpy",
     "pandas",
+    "tabicl",
 ]
 
 [project.optional-dependencies]
