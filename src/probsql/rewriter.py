@@ -53,7 +53,7 @@ def _split(comparison):
     return None
 
 _REDUCERS = {
-    "PSQL_PREDICT": lambda grid, levels, args: constructs.predict(grid, levels),
+    "PSQL_PREDICT": lambda grid, levels: constructs.predict(grid, levels),
     "PSQL_LOW": lambda grid, levels, args: constructs.low(grid, levels, args[0]),
     "PSQL_HIGH": lambda grid, levels, args: constructs.high(grid, levels, args[0]),
     "PSQL_PROBABILITY": lambda grid, levels, args: _probability(grid, levels, args[0], args[1]),
@@ -125,7 +125,7 @@ def _check_node(node, ast):
             _unsupported(f"{name} with a level that is not a plain number")
 
 
-def _grid(con, table_name, column_name, model_factory):
+def compute_grid(con, table_name, column_name, model_factory):
     """Run the model once. Returns (rowids, quantile grid, levels)."""
     df = con.sql(f"SELECT rowid AS {_RID}, * FROM {_quote(table_name)}").df()
     target = next((c for c in df.columns if c.lower() == column_name.lower()), None)
@@ -190,7 +190,7 @@ def rewrite(ast, con, model_factory):
     for i, group in enumerate(groups.values()):
         name = f"_psql_pred_{i}"
         column = _target(group[0]).name
-        rids, grid, levels = _grid(con, table.name, column, model_factory)
+        rids, grid, levels = compute_grid(con, table.name, column, model_factory)
 
         data = {"rid": rids}
         keys = [n.sql().upper() for n in group]
