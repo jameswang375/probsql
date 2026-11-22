@@ -1,8 +1,7 @@
 import duckdb
 import pandas as pd
-import sqlglot
-from sqlglot import exp
 
+from probsql.parser import parse_read_query
 from probsql.rewriter import rewrite
 
 
@@ -14,15 +13,6 @@ class Engine:
         self.model_factory = model_factory  # creates a fresh model per prediction
 
     def query(self, sql: str) -> pd.DataFrame:
-        statements = [s for s in sqlglot.parse(sql, read=self.dialect) if s is not None]
-        if len(statements) != 1:
-            raise ValueError("Engine.query expects exactly one statement")
-
-        ast = statements[0]
-        if not isinstance(ast, exp.Query):
-            raise ValueError("Engine only supports read queries")
-
+        ast = parse_read_query(sql, self.dialect)
         ast = rewrite(ast, self.con, self.model_factory)
-
-        final_sql = ast.sql(dialect=self.dialect)
-        return self.con.sql(final_sql).df()
+        return self.con.sql(ast.sql(dialect=self.dialect)).df()

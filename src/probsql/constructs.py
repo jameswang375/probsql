@@ -67,12 +67,16 @@ def high(grid, levels, level):
 
 
 def prob_exceeds(grid, levels, threshold):
-    """P(value > threshold) for every row, as an array of shape (n_rows,).
+    """For each row, return the chance that the value is above the threshold.
 
-    The grid only resolves probabilities between levels[0] and levels[-1],
-    so results are clamped to [1 - levels[-1], 1 - levels[0]]. Beyond that
-    range the value is a bound, not an exact probability.
+    The result has one number per row.
+
+    The grid only covers chances from 0.01 to 0.99, so the answer is never below
+    0.01 or above 0.99. If the threshold is far outside what the model expects
+    for a row, the real chance could be even smaller or larger than that, so
+    treat 0.01 and 0.99 as limits, not exact values.
     """
+
     grid, levels = _check_grid(grid, levels)
     if not np.isfinite(threshold):
         raise ValueError("threshold must be a finite number")

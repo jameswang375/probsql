@@ -3,3 +3,5 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .DS_Store
+scratch_query.py
+scratch_query2.py
