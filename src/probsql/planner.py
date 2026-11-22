@@ -2,27 +2,28 @@ from dataclasses import dataclass
 from sqlglot import exp
 from probsql.constructs import REGISTRY
 from probsql.parser import find_constructs
+from typing import NoReturn
 
 @dataclass(frozen=True)
 class Group:
     column: str     # target column as written in query
-    nodes: tuple    # every PSQL_* call that uses this column
+    nodes: tuple[exp.Anonymous, ...]    # every PSQL_* call that uses this column
 
 @dataclass(frozen=True)
 class Plan:
     table: str      # the base table in FROM
     alias: str      # the name the query uses for it
-    groups: tuple   # one Group per target column; the model runs once per group
+    groups: tuple[Group, ...]   # one Group per target column; the model runs once per group
 
-def _unsupported(something):
+def _unsupported(something: str) -> NoReturn:
     raise ValueError(f"{something} is not supported yet")
 
-def _target(node):
+def _target(node: exp.Anonymous) -> exp.Expression:
     if node.name.upper() == "PSQL_PROBABILITY":
         return _split(node.expressions[0])[0]
     return node.expressions[0]
 
-def _number(node):
+def _number(node: exp.Expression) -> float | None:
     """Value of a constant like 500000, -5 or (100 + 5) * 2, or None if it's anything else."""
     if isinstance(node, exp.Paren):
         return _number(node.this)
@@ -45,7 +46,7 @@ def _number(node):
     return None
 
 
-def _split(comparison):
+def _split(comparison: exp.Expression) -> tuple[exp.Column, float, bool] | None:
     """For a comparison between a column and a constant, in either order, return
     (column, number, asks_below), where asks_below is True if it asks for the chance the
     column is under the number. Returns None for anything else."""
@@ -60,7 +61,7 @@ def _split(comparison):
     return None
 
 
-def source_table_name(ast):
+def source_table_name(ast: exp.Expression) -> str | None:
      """Name of the single table in FROM, or None if the query has no plain table."""
 
      if not isinstance(ast, exp.Select):
@@ -70,7 +71,7 @@ def source_table_name(ast):
          return None
      return from_.this.name
 
-def _check_query(ast, source_is_base_table):
+def _check_query(ast: exp.Expression, source_is_base_table: bool) -> None:
     if not isinstance(ast, exp.Select):
         _unsupported("PSQL_* in this kind of query")
     from_ = ast.args.get("from_")
@@ -87,7 +88,7 @@ def _check_query(ast, source_is_base_table):
         if is_star:
             _unsupported("SELECT * together with PSQL_*")
 
-def _check_node(node, ast):
+def _check_node(node: exp.Anonymous, ast: exp.Expression) -> None:
     name = node.name.upper()
     if name not in REGISTRY:
         _unsupported(name)
@@ -111,7 +112,7 @@ def _check_node(node, ast):
         if not isinstance(level, exp.Literal) or level.is_string:
             _unsupported(f"{name} with a level that is not a plain number")
 
-def plan(ast, source_is_base_table):
+def plan(ast: exp.Expression, source_is_base_table: bool) -> Plan:
     """Decide what work the query needs, without doing any of it.
 
     ast: a parsed query. source_is_base_table: whether the table in FROM is a

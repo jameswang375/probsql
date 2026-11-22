@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence, Callable
 
 import numpy as np
 import pandas as pd
@@ -19,15 +20,12 @@ class PredictiveModel(ABC):
       - Sorted: each output row is ascending, so column j is the quantile
         at levels[j].
       - Finite: no NaN or infinite values in the output.
-      - Batch independence: a row's output depends only on that row's values
-        and the fitted context, never on which other rows are in the batch.
-        (Documented and tested per backend; the base class cannot enforce it.)
       - Repeatable: same context, same row, same seed -> same output.
       - Context has no missing targets, and query rows have the same columns
         as the context rows.
     """
 
-    def __init__(self, levels=DEFAULT_LEVELS, seed: int = 0):
+    def __init__(self, levels: Sequence[float] = DEFAULT_LEVELS, seed: int = 0) -> None:
         levels = np.asarray(levels, dtype=float)
         if levels.ndim != 1 or len(levels) == 0:
             raise ValueError("levels must be a non-empty 1-D sequence")
@@ -77,3 +75,5 @@ class PredictiveModel(ABC):
     @abstractmethod
     def _predict_quantiles(self, X_query: pd.DataFrame) -> np.ndarray:
         """Return an array of shape (len(X_query), len(self.levels))."""
+
+ModelFactory = Callable[[], PredictiveModel]

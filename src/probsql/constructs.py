@@ -1,12 +1,13 @@
 import numpy as np
 from dataclasses import dataclass
+from numpy.typing import ArrayLike, NDArray
 
 # Levels closer than this are treated as equal. It absorbs float noise like
 # (1 - 0.9) / 2 == 0.04999999999999999.
 _TOL = 1e-9
 
 
-def _check_grid(grid, levels):
+def _check_grid(grid: ArrayLike, levels: ArrayLike) -> tuple[NDArray, NDArray]:
     grid = np.asarray(grid, dtype=float)
     levels = np.asarray(levels, dtype=float)
     if grid.ndim != 2 or grid.shape[1] != len(levels):
@@ -16,7 +17,7 @@ def _check_grid(grid, levels):
     return grid, levels
 
 
-def quantile_at(grid, levels, p):
+def quantile_at(grid: ArrayLike, levels: ArrayLike, p: float) -> NDArray:
     """Return the p-quantile for every row, as an array of shape (n_rows,).
 
     Levels on the grid return that column exactly; levels between two grid
@@ -43,7 +44,7 @@ def quantile_at(grid, levels, p):
     return grid[:, j - 1] * (1 - weight) + grid[:, j] * weight
 
 
-def interval_levels(level):
+def interval_levels(level: float) -> tuple[float, float]:
     """Central interval of the given coverage -> (lower level, upper level)."""
     if not (0 < level < 1):
         raise ValueError("interval level must be strictly between 0 and 1")
@@ -51,22 +52,22 @@ def interval_levels(level):
     return tail, 1 - tail
 
 
-def predict(grid, levels):
+def predict(grid: ArrayLike, levels: ArrayLike) -> NDArray:
     """Point prediction: the median."""
     return quantile_at(grid, levels, 0.5)
 
 
-def low(grid, levels, level):
+def low(grid: ArrayLike, levels: ArrayLike, level: float) -> NDArray:
     """Lower end of the central interval with the given coverage."""
     return quantile_at(grid, levels, interval_levels(level)[0])
 
 
-def high(grid, levels, level):
+def high(grid: ArrayLike, levels: ArrayLike, level: float) -> NDArray:
     """Upper end of the central interval with the given coverage."""
     return quantile_at(grid, levels, interval_levels(level)[1])
 
 
-def prob_exceeds(grid, levels, threshold):
+def prob_exceeds(grid: ArrayLike, levels: ArrayLike, threshold: float) -> NDArray:
     """For each row, return the chance that the value is above the threshold.
 
     The result has one number per row.
