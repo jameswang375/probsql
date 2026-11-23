@@ -18,10 +18,10 @@ def _check_grid(grid: ArrayLike, levels: ArrayLike) -> tuple[NDArray, NDArray]:
 
 
 def quantile_at(grid: ArrayLike, levels: ArrayLike, p: float) -> NDArray:
-    """Return the p-quantile for every row, as an array of shape (n_rows,).
+    """For every row, return the value at the given quantile.
 
     Levels on the grid return that column exactly; levels between two grid
-    points are linearly interpolated. Levels outside [levels[0], levels[-1]]
+    points are linearly interpolated. Levels outside the given range
     raise ValueError, because the grid has no information there.
     """
     grid, levels = _check_grid(grid, levels)

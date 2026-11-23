@@ -5,3 +5,6 @@ __pycache__/
 .DS_Store
 scratch_query.py
 scratch_query2.py
+spike_dialect.py
+scratch_query3.py
+scratch_query4.py

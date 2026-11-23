@@ -1,13 +1,15 @@
 import duckdb
 import polars as pl
+from sqlglot.dialects.dialect import Dialect
 
 from probsql.parser import parse_read_query
 from probsql.rewriter import rewrite
 from probsql.models.base import ModelFactory
+from probsql.dialect import ProbSQL
 
 
 class Engine:
-    def __init__(self, model_factory: ModelFactory, con: duckdb.DuckDBPyConnection | None = None, dialect: str = "duckdb") -> None:
+    def __init__(self, model_factory: ModelFactory, con: duckdb.DuckDBPyConnection | None = None, dialect: str | type[Dialect] = ProbSQL) -> None:
         # Use the caller's connection if given, otherwise a fresh in-memory DB.
         self.con = con if con is not None else duckdb.connect()
         self.dialect = dialect  # must match the database behind con
