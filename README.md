@@ -19,7 +19,7 @@ A natural language layer and a chat interface sit on top, so a question like "Wh
 
 **Prediction with uncertainty.** A prediction is more useful when it says how likely different outcomes are. Instead of "$310k", a query can return a range ("probably between $260k and $370k") or a probability ("85% chance it is worth more than $300k").
 
-**Tabular foundation model.** A neural network pretrained once on a very large number of synthetic tables. Given a new table, it makes predictions without being trained on that table. Interested in learning more? Here is a nice read on Tabular Foundation Models [Tabular Foundation Models](https://tabularfoundationmodels.com/).
+**Tabular foundation model.** A neural network pretrained once on a very large number of synthetic tables. Given a new table, it makes predictions without being trained on that table. Interested in learning more? Here is a nice read on [Tabular Foundation Models](https://tabularfoundationmodels.com/).
 
 **In-context learning.** The model does not update its weights on your data. The table is passed in as input at prediction time, and the model infers the missing values from the rows it can see. The cost of prediction is therefore paid on every call, not once at training time.
 
