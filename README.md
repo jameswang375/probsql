@@ -1,8 +1,8 @@
 # ProbSQL
 
-Plain SQL can only return what is already stored in a table. It can sum, filter and join, but it cannot say what is probably true about something that is not there, such as a missing value, or how confident that answer is. You could achieve this through traditional machine learning, but that involves models outside of the database.
+Plain SQL can only return what is already stored in a table. It can sum, filter and join etc., but it cannot say what is probably true about something that is not there, such as a missing value, or how confident that answer is. You could achieve this through traditional machine learning means or using AI, but that involves models outside of the database.
 
-probsql dialect enables probabilistic querying by extending SQL with a few probabilistic keywords. A query can ask for a prediction, a range around it, or the chance that a value is above a threshold. The answers come back as ordinary columns, so filtering, sorting and grouping are all valid.
+ProbSQL dialect enables probabilistic querying by extending SQL with a few probabilistic keywords. A query can ask for a prediction, a range around it, or the chance that a value is above a threshold. The answers come back as ordinary columns, so filtering, sorting and grouping are all valid. This allows users to utilize these new functionalities generally only achievable through AI and/or Bayesian methods, purely by writing native SQL.
 
 ```sql
 SELECT home_id,
@@ -43,8 +43,7 @@ SQL text -> parse -> find PSQL_* calls -> plan -> run the model
          -> turn the grid into columns -> rewrite the query -> DuckDB runs plain SQL
 ```
 
-DuckDB, or any other SQL engine, never sees a model, and the model never sees SQL. In between, the code rewrites each probabilistic call into a column of a small results table, joined back to the original table on `rowid`.
-
+DuckDB, or any other SQL engine, never sees a model, and the model never sees SQL. In between, the code rewrites each probabilistic call into a column of a small results table, joined back to the original table.
 ## Design decisions
 
 **Functional core, imperative shell.** Decisions are made in pure functions that take plain data and return plain data: `plan`, `choose_columns`, `split_rows`, `fit_plan`, `reduce_calls`, `parse_read_query`, and the math in `constructs.py`. Side effects sit at the edge: reading tables from DuckDB, calling the model, registering tables, and calling the LLM. For example, whether the query's table is a real table is looked up by the shell and passed into `plan` as a plain boolean, so `plan` never touches the database. The model is allowed to be impure, since it sits in the shell. This keeps the logic easy to read on its own and means changes such as speeding up model fits are confined to one function.
@@ -59,4 +58,11 @@ export OPENAI_API_KEY="your-key"   # only needed for the natural language layer
 streamlit run app.py
 ```
 
-The first model use downloads the TabICL checkpoint, so it needs internet access. 
+The first model use downloads the TabICL checkpoint, so it needs internet access.
+
+## Some technologies used
+- sqlglot
+- TabICL (tabular foundation model)
+- gpt-5-mini (OpenAI API)
+- Polars and Pandas (DataFrames)
+- DuckDB database
