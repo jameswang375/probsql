@@ -17,7 +17,7 @@ A natural language layer and a chat interface sit on top, so a question like "Wh
 
 ## Key Ideas
 
-**Prediction with uncertainty.** A prediction is more useful with a range. "About $310k, probably between $260k and $370k" supports better decisions than "$310k".
+**Prediction with uncertainty.** A prediction is more useful when it says how likely different outcomes are. Instead of "$310k", a query can return a range ("probably between $260k and $370k") or a probability ("85% chance it is worth more than $300k").
 
 **Tabular foundation model.** A neural network pretrained once on a very large number of synthetic tables. Given a new table, it makes predictions without being trained on that table. Interested in learning more? Here is a nice read on Tabular Foundation Models [Tabular Foundation Models](https://tabularfoundationmodels.com/).
 
