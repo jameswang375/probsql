@@ -23,7 +23,7 @@ A natural language layer and a chat interface sit on top, so a question like "Wh
 
 **In-context learning.** The model does not update its weights on your data. The table is passed in as input at prediction time, and the model infers the missing values from the rows it can see. The cost of prediction is therefore paid on every call, not once at training time.
 
-## The four constructs and new SQL syntax
+## The four constructs/new SQL syntax
 
 Each has a keyword form and an equivalent function form. Both work.
 
