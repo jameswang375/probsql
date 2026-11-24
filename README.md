@@ -1,4 +1,4 @@
-# probsql
+# ProbSQL
 
 Plain SQL can only return what is already stored in a table. It can sum, filter and join, but it cannot say what is probably true about something that is not there, such as a missing value, or how confident that answer is. You could achieve this through traditional machine learning, but that involves models outside of the database.
 
