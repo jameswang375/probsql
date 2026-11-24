@@ -13,7 +13,7 @@ FROM homes
 WHERE (PROBABILITY OF cost > 300000) > 0.8
 ```
 
-A natural language layer and a chat interface sit on top, so a question like "Which homes are worth more than 300000?" is translated into SQL (text to SQL) like the above and run.
+A natural language layer and a chat interface sit on top, so a question like "Which homes are worth more than $300000?" is translated into SQL (text to SQL) like the above and run.
 
 ## Key Ideas
 
