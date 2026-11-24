@@ -16,6 +16,7 @@ dependencies = [
     "tabicl",
     "polars",
     "pyarrow",
+    "openai",
 ]
 
 [project.optional-dependencies]
