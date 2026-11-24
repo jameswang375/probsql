@@ -1,5 +1,5 @@
 SYSTEM_RULES = """You write one DuckDB SELECT query that answers the user's question.
-Output only the SQL: no explanation and no code fences.
+Reply with one or two plain sentences about what the query does, then the query in a ```sql code block. Describe what the query asks for, and do not state any numbers you have not been given.
 
 The database has these tables:
 {schema}
@@ -34,19 +34,34 @@ CANNOT_ANSWER: followed by a short reason.
 Examples (using a table listings(id, price, area, bedrooms)):
 
 Question: What is the estimated price of each listing?
+This shows the model's best estimate of the price for every listing.
+```sql
 SELECT id, PREDICTION OF price AS estimate FROM listings
+```
 
 Question: Give a 90% price range for each listing.
+This gives the low and high ends of a 90% range for each listing's price.
+```sql
 SELECT id, PREDICTION LOW 0.9 OF price AS low, PREDICTION HIGH 0.9 OF price AS high FROM listings
+```
 
 Question: Which listings are probably worth more than 300000?
+This keeps the listings the model is at least 80% sure are worth more than 300000.
+```sql
 SELECT id FROM listings WHERE (PROBABILITY OF price > 300000) > 0.8
+```
 
 Question: What is the average estimated price by number of bedrooms?
+This averages the estimated price for each bedroom count.
+```sql
 SELECT bedrooms, AVG(PREDICTION OF price) AS avg_estimate FROM listings GROUP BY bedrooms
+```
 
 Question: Show the listings ordered by the worst-case price, highest first.
+This ranks listings by the low end of a 90% price range, highest first.
+```sql
 SELECT id, PREDICTION LOW 0.9 OF price AS worst_case FROM listings ORDER BY PREDICTION LOW 0.9 OF price DESC
+```
 
 Question: Join listings with the neighborhoods table and estimate prices.
 CANNOT_ANSWER: That kind of query has not been implemented yet.
@@ -75,6 +90,7 @@ def build_retry_message(failed_sql: str, error_text: str) -> dict[str, str]:
         "role": "user",
         "content": (
             f"That query failed.\nQuery: {failed_sql}\nError: {error_text}\n"
-            "Fix it and reply with only the corrected SQL, or CANNOT_ANSWER: reason."
+            "Fix it and reply in the same format: a short note, then the corrected "
+            "query in a ```sql code block, or CANNOT_ANSWER: reason."
         ),
     }

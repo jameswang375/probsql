@@ -31,21 +31,22 @@ def load_llm() -> LLM:
 
 
 def answer(question: str, engine: Engine, llm: LLM) -> dict:
-    """Run one question. Returns a dict with the SQL, a result table or a message."""
     try:
-        sql = question_to_sql(question, engine.con, ProbSQL, llm)
+        note, sql, after = question_to_sql(question, engine.con, ProbSQL, llm)
     except CannotAnswer as reason:
-        return {"sql": None, "table": None, "message": f"Cannot answer: {reason}"}
+        return {"note": None, "sql": None, "table": None, "after": None, "message": f"Cannot answer: {reason}"}
     except Exception as error:
-        return {"sql": None, "table": None, "message": f"Could not write a valid query: {error}"}
+        return {"note": None, "sql": None, "table": None, "after": None, "message": f"Could not write a valid query: {error}"}
     try:
-        return {"sql": sql, "table": engine.query(sql), "message": None}
+        return {"note": note, "sql": sql, "table": engine.query(sql), "after": after, "message": None}
     except Exception as error:
-        return {"sql": sql, "table": None, "message": f"The query failed: {error}"}
+        return {"note": note, "sql": sql, "table": None, "after": after, "message": f"The query failed: {error}"}
 
 
 def show(entry: dict) -> None:
-    """Draw one assistant reply: the SQL, then the table or the message."""
+    """Draw one assistant reply."""
+    if entry["note"]:
+        st.write(entry["note"])
     if entry["sql"]:
         st.code(entry["sql"], language="sql")
     if entry["message"]:
@@ -53,6 +54,8 @@ def show(entry: dict) -> None:
     table: pl.DataFrame | None = entry["table"]
     if table is not None:
         st.dataframe(table)
+    if entry["after"]:
+        st.write(entry["after"])
 
 
 st.title("probsql demo")
