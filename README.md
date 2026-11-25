@@ -1,8 +1,8 @@
 # ProbSQL
 
-Plain SQL can only return what is already stored in a table. It can sum, filter and join etc., but it cannot say what is probably true about something that is not there, such as a missing value, or how confident that answer is. You could achieve this through traditional machine learning means or using AI, but that involves models outside of the database.
+Plain SQL can only return what is already stored in a table. It can sum, filter and join, but it cannot answer questions like 'what is the value likely to be, and how confident is that estimate?". To illustrate the usefulness of such a concept, people practicing in medicine could ask or query what the probability of this patient getting heart disease is, what their expected blood pressure would be, or the chance that their cholestorel would be above a certain number etc. You could achieve this through traditional machine learning means or using generative AI, but that involves models outside of the database. In addition, you risk the possibility that generative AI will [hallucinate and not get it right](https://priorlabs.ai/blog-posts/manifesto), and dedicating traditional machine learning efforts to achieve this would take a lot of effort to get it right.
 
-ProbSQL dialect enables probabilistic querying by extending SQL with a few probabilistic keywords. A query can ask for a prediction, a range around it, or the chance that a value is above a threshold. The answers come back as ordinary columns, so filtering, sorting and grouping are all valid. This allows users to utilize these new functionalities generally only achievable through AI and/or Bayesian methods, purely by writing native SQL.
+ProbSQL dialect enables probabilistic querying by extending SQL with a few probabilistic keywords. A query can ask for a prediction, a range around it, or the chance that a value is above a threshold. The answers come back as ordinary columns, so filtering, sorting and grouping are all valid. This allows users to utilize these new functionalities generally only achievable through AI and/or Bayesian methods, purely by writing SQL. The underlying AI engine that makes this possible are tabular foundation models, which are designed for structured data. In short, think of them as GPTs for tables (although they aren't LLMs, but they are transfomer-based with neural nets/attention and such). 
 
 ```sql
 SELECT home_id,
@@ -19,9 +19,7 @@ A natural language layer and a chat interface sit on top, so a question like "Wh
 
 **Prediction with uncertainty.** A prediction is more useful when it says how likely different outcomes are. Instead of "$310k", a query can return a range ("probably between $260k and $370k") or a probability ("85% chance it is worth more than $300k").
 
-**Tabular foundation model.** A neural network pretrained once on a very large number of synthetic tables. Given a new table, it makes predictions without being trained on that table. Interested in learning more? Here is a nice read on [Tabular Foundation Models](https://tabularfoundationmodels.com/).
-
-**In-context learning.** The model does not update its weights on your data. The table is passed in as input at prediction time, and the model infers the missing values from the rows it can see. The cost of prediction is therefore paid on every call, not once at training time.
+**Tabular foundation model.** A model pretrained once on a very large number of synthetic tables that serves as our prior. Given a new table and performing **in-context learning**, it makes predictions without being trained on that table. This is significantly more flexible than traditional machine learning where you have to train again on datasets. Interested in learning more? Here is a nice read on [Tabular Foundation Models](https://tabularfoundationmodels.com/).
 
 ## The four constructs/new SQL syntax
 
